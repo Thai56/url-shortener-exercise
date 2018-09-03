@@ -1,7 +1,8 @@
 package urlshort
 
 import (
-	"fmt"
+	yamlParser "gopkg.in/yaml.v2"
+	"log"
 	"net/http"
 )
 
@@ -12,19 +13,12 @@ import (
 // If the path is not provided in the map, then the fallback
 // http.Handler will be called instead.
 func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.HandlerFunc {
-	//	TODO: Implement this...
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("Req: %s %s \n", r.Host, r.URL.Path)
-		//TODO: check if the urlpath exists in map
 		targetPath, ok := pathsToUrls[r.URL.Path]
 		if ok {
-			fmt.Println("Key was found!")
-			//TODO: make sure that this gets redirected properly
-			//- so far it is making user select OK
-			http.Redirect(w, r, targetPath, 200)
+			http.Redirect(w, r, targetPath, 307)
 		} else {
-			fmt.Println("Key not found!")
-			//TODO: Find out how to call fallback
+			fallback.ServeHTTP(w, r)
 		}
 	},
 	)
@@ -47,7 +41,29 @@ func MapHandler(pathsToUrls map[string]string, fallback http.Handler) http.Handl
 //
 // See MapHandler to create a similar http.HandlerFunc via
 // a mapping of paths to urls.
+
+type Entry struct {
+	Path string `yaml:"path"`
+	URL  string `yaml:"url"`
+}
+
+type Entries []Entry
+
 func YAMLHandler(yml []byte, fallback http.Handler) (http.HandlerFunc, error) {
-	// TODO: Implement this...
-	return nil, nil
+	var entries Entries
+
+	err := yamlParser.Unmarshal(yml, &entries)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, e := range entries {
+			if e.Path == r.URL.Path {
+				http.Redirect(w, r, e.URL, 307)
+				return
+			}
+		}
+		fallback.ServeHTTP(w, r)
+	}), nil
 }
